@@ -1,11 +1,22 @@
 using LibreriaAPI.DB;
+using LibreriaAPI.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
 using System.Text;
 
+//Configuracion para hacer logs del sistema
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .WriteTo.File("logs/libreria.txt", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
+
 var builder = WebApplication.CreateBuilder(args);
+
+//Agregar builder que logea al .txt
+builder.Host.UseSerilog();
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -13,7 +24,7 @@ builder.Services.AddControllers();
 //Agregar servicio de DB pasandole el contexto de la clase y el default connection del appsettings.json
 builder.Services.AddDbContext<LibreriaContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-//Agregar autenticacion de JWT
+//Agregar servicio de autenticacion con JWT
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -57,12 +68,15 @@ builder.Services.AddSwaggerGen(c =>
                     Id = "Bearer"
                 }
             },
-            new string[] {}
+            Array.Empty<string>()
         }
     });
 });
 
 var app = builder.Build();
+
+//Iniciamos el middleware desde el inicio para que englobe todo el pipeline, si lo ponemos despues de iniciar otro proceso no será capaz de capturar esos errores.
+app.UseMiddleware<ErrorHandlingMiddleware>();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -71,6 +85,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+//Redirecciona las peticiones HTTP a una conexion mas segura (HTTPs)
 app.UseHttpsRedirection();
 
 //Le dice a la app que use autenticacion de JWT

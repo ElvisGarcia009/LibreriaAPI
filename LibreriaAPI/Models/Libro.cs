@@ -13,17 +13,5 @@ namespace LibreriaAPI.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal Precio { get; set; }
 
-       /** public static bool EncontrarLibro(List<Libro> libros, int id)
-        {
-            if (libros.Any(n => n.Id == id))
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }**/
-
     }
 }

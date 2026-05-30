@@ -19,10 +19,11 @@ namespace LibreriaAPI.Controllers
         }
 
         //BUSCAR TODOS LOS LIBROS
+        //[FromQuery] le dice a ASP.NET que los parámetros vienen en la URL como query strings, no en el body
         [HttpGet]
-        public ActionResult<List<LibroDTO>> ObtenerLibros()
-        {
+        public ActionResult<RespuestaPaginadaDTO> ObtenerLibros([FromQuery] PaginacionDTO paginacion)
 
+        {
             var result = _context.libros.Select(libro => new LibroDTO
             {
 
