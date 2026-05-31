@@ -8,7 +8,7 @@ namespace LibreriaAPI.DTOs
         public int TamañoPagina { get; set; } = 10;
         public int TotalRegistros { get; set; }
         public int TotalPaginas { get; set; }
-        public List<Libro> Datos { get; set; }
+        public required List<LibroDTO> Datos { get; set; }
 
     }
 }

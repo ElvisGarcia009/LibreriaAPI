@@ -3,37 +3,62 @@ using LibreriaAPI.DTOs;
 using LibreriaAPI.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace LibreriaAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
-    public class LibrosController : ControllerBase
+    public class LibrosController(LibreriaContext context, IMemoryCache memoryCache) : ControllerBase
     {
-        private readonly LibreriaContext _context;
+        private readonly LibreriaContext _context = context;
+        private readonly IMemoryCache _cache = memoryCache;
+        private static int _cacheVersion = 0;
 
-        public LibrosController(LibreriaContext context)
-        {
-            _context = context;
-        }
 
         //BUSCAR TODOS LOS LIBROS
-        //[FromQuery] le dice a ASP.NET que los parámetros vienen en la URL como query strings, no en el body
+        //[FromQuery] le dice a ASP.NET que los parámetros vienen en la URL como query strings, no en el body 
         [HttpGet]
         public ActionResult<RespuestaPaginadaDTO> ObtenerLibros([FromQuery] PaginacionDTO paginacion)
 
         {
-            var result = _context.libros.Select(libro => new LibroDTO
+            //KEY VALUE parecido al que tuve que hacer en PocketPlanner
+            string cacheKey = $"libros_v{_cacheVersion}_p{paginacion.Pagina}_t{paginacion.TamañoPagina}_b{paginacion.Busqueda}";
+
+            if (_cache.TryGetValue(cacheKey, out RespuestaPaginadaDTO? cachedResult))
             {
+                return Ok(cachedResult);
+            }
 
-                Id = libro.Id,
-                Titulo = libro.Titulo,
-                Autor = libro.Autor,
-                Precio = libro.Precio
+            var query = _context.libros.AsQueryable();
 
+            if (!string.IsNullOrEmpty(paginacion.Busqueda))
+            {
+                query = query.Where(l => l.Titulo.Contains(paginacion.Busqueda) || l.Autor.Contains(paginacion.Busqueda));
+            }
+
+            int totalRegistros = query.Count();
+            query = query.Skip((paginacion.Pagina - 1) * paginacion.TamañoPagina).Take(paginacion.TamañoPagina);
+
+            List<LibroDTO> convertirAlibroDTO = query.Select(l => new LibroDTO
+            {
+                Id = l.Id,
+                Titulo = l.Titulo,
+                Autor = l.Autor,
+                Precio = l.Precio
             }).ToList();
 
+            RespuestaPaginadaDTO result = new ()
+            {
+                Pagina = paginacion.Pagina,
+                TamañoPagina = paginacion.TamañoPagina,
+                TotalRegistros = totalRegistros,
+                TotalPaginas = (int)Math.Ceiling((double)totalRegistros / paginacion.TamañoPagina),
+                Datos = convertirAlibroDTO
+            };
+
+            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(30));
             return Ok(result);
         }
 
@@ -48,7 +73,7 @@ namespace LibreriaAPI.Controllers
 
             if(result != null)
             {
-                LibroDTO LibroEncontrado = new LibroDTO
+                LibroDTO LibroEncontrado = new()
                 {
                     Id = result.Id,
                     Titulo = result.Titulo,
@@ -70,7 +95,7 @@ namespace LibreriaAPI.Controllers
         [HttpPost]
         public ActionResult<LibroDTO> SubirLibro(CrearLibroDTO libro)
         {
-            Libro nuevoLibro = new Libro
+            Libro nuevoLibro = new()
             {
                 Titulo = libro.Titulo,
                 Autor = libro.Autor,
@@ -80,7 +105,7 @@ namespace LibreriaAPI.Controllers
             _context.Add(nuevoLibro);
             _context.SaveChanges();
 
-            LibroDTO libroGuardado = new LibroDTO
+            LibroDTO libroGuardado = new ()
             {
                 Id = nuevoLibro.Id,
                 Titulo = nuevoLibro.Titulo,
@@ -88,6 +113,7 @@ namespace LibreriaAPI.Controllers
                 Precio = nuevoLibro.Precio
             };
 
+            _cacheVersion++;
             return CreatedAtAction(nameof(EncontrarLibroPorId), new {id = libroGuardado.Id}, libroGuardado);
 
         }
@@ -120,6 +146,8 @@ namespace LibreriaAPI.Controllers
                     Precio = contenerLibro.Precio
                 };
 
+                _cacheVersion++;
+
                 return Ok(devolverLibro);
             }
             else
@@ -138,6 +166,7 @@ namespace LibreriaAPI.Controllers
                 Libro libroEliminado = _context.libros.First(libro => libro.Id == id);
                 _context.libros.Remove(libroEliminado);
                 _context.SaveChanges();
+                _cacheVersion++;
 
                 return NoContent();
             } 

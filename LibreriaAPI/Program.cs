@@ -21,6 +21,9 @@ builder.Host.UseSerilog();
 // Add services to the container.
 builder.Services.AddControllers();
 
+//Agregar servicios de caché a la API
+builder.Services.AddMemoryCache();
+
 //Agregar servicio de DB pasandole el contexto de la clase y el default connection del appsettings.json
 builder.Services.AddDbContext<LibreriaContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
